@@ -854,9 +854,12 @@ async def perform_initial_indexing(folder: str) -> bool:
     """Check if collection exists and perform initial indexing if needed."""
     try:
         indexing_status["folders"][folder] = "indexing"
+        os.system(f'notify-send -i accessories-text-editor "Titan RAG" "Indexing started: {folder}"')
+        
         folder_path = os.path.join(config["projects_root"], folder)
         if not os.path.exists(folder_path):
             logger.error(f"Folder not found: {folder_path}")
+            os.system(f'notify-send -u critical "Titan RAG" "Folder not found: {folder}"')
             return False
 
         collection_name = sanitize_collection_name(folder)
@@ -868,6 +871,7 @@ async def perform_initial_indexing(folder: str) -> bool:
                 embedding_function=embedding_function
             )
             logger.info(f"Collection {collection_name} already exists, skipping initial indexing")
+            indexing_status["folders"][folder] = "ready"
             return True
         except Exception:
             logger.info(f"Collection {collection_name} not found, performing initial indexing")
@@ -884,6 +888,7 @@ async def perform_initial_indexing(folder: str) -> bool:
             process_and_index_documents(documents, collection_name, "chroma_db")
             logger.info(f"Successfully performed initial indexing for {folder}")
             indexing_status["folders"][folder] = "ready"
+            os.system(f'notify-send -i checkbox-checked-symbolic "Titan RAG" "Indexing complete: {folder}"')
             return True
         else:
             logger.warning(f"No documents found to index in {folder}")
@@ -893,6 +898,7 @@ async def perform_initial_indexing(folder: str) -> bool:
     except Exception as e:
         indexing_status["folders"][folder] = f"error: {str(e)}"
         logger.error(f"Error during initial indexing of {folder}: {e}")
+        os.system(f'notify-send -u critical "Titan RAG" "Error indexing {folder}: {str(e)}"')
         return False
 
 
