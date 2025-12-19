@@ -688,11 +688,12 @@ async def update_project_memory(category: str, content: str) -> str:
 
 @mcp.tool()
 async def get_project_map() -> str:
-    """Get a high-level overview of the current project (files, git, stack)."""
+    """Get a high-level overview of the current project (files, git, stack, VRAM)."""
     project_map = {
         "structure": "",
         "git_history": "",
-        "tech_stack": []
+        "tech_stack": [],
+        "vram_free_mb": 0
     }
     
     try:
@@ -709,8 +710,17 @@ async def get_project_map() -> str:
             if file == "Cargo.toml": project_map["tech_stack"].append("Rust")
             if file == "go.mod": project_map["tech_stack"].append("Go")
             if file == "Makefile": project_map["tech_stack"].append("C/C++ (Make)")
+
+        # 4. VRAM Check
+        gpu_info = os.popen("rocm-smi --showmeminfo vram --json").read()
+        gpu_data = json.loads(gpu_info)
+        for metrics in gpu_data.values():
+            total = int(metrics.get("VRAM Total Memory (B)", 0))
+            used = int(metrics.get("VRAM Total Used Memory (B)", 0))
+            project_map["vram_free_mb"] = round((total - used) / (1024**2), 1)
+            break # Just take the first GPU
     except Exception as e:
-        return f"Failed to generate map: {str(e)}"
+        logger.error(f"Map error: {e}")
 
     return json.dumps(project_map, indent=2)
 
