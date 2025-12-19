@@ -945,6 +945,33 @@ async def release_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def execute_autonomous_workflow(project_path: str = ".") -> str:
+    """Run a full autonomous cycle: Quality check, Tests, Security audit, and Commit."""
+    steps = [
+        ("Checking Code Quality", check_code_quality),
+        ("Running Tests", run_tests),
+        ("Performing Security Audit", audit_security),
+    ]
+    
+    report = [f"🚀 Starting Titan Autonomous Workflow for {project_path}"]
+    
+    for name, func in steps:
+        report.append(f"\n--- {name} ---")
+        res = await func(project_path)
+        report.append(res)
+        if "❌" in res or "error" in res.lower() or "FAILED" in res:
+            report.append("\n⚠️ Workflow halted due to issues. Please fix them first.")
+            return "\n".join(report)
+
+    # If all passed, generate commit message
+    report.append("\n--- Finalizing ---")
+    commit_msg = await generate_commit_message()
+    report.append(f"Suggested Commit: {commit_msg}")
+    
+    return "\n".join(report)
+
+
+@mcp.tool()
 async def generate_docstrings(file_path: str) -> str:
     """Analyze a file and add missing docstrings to functions and classes using AI."""
     try:
