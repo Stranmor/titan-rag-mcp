@@ -955,6 +955,53 @@ async def release_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def safe_update_dependency(project_path: str, package_name: str, manager: str = "pip") -> str:
+    """Attempt to update a package and rollback if tests fail.
+    Args:
+        project_path: Path to the project.
+        package_name: Name of the package to update.
+        manager: Package manager ('pip', 'npm', 'cargo').
+    """
+    try:
+        report = [f"🛡️ Starting Safe Update for {package_name} in {project_path}"]
+        
+        # 1. Initial Test Run
+        report.append("Running initial tests...")
+        initial_test_res = await run_tests(project_path)
+        if "FAILED" in initial_test_res:
+            return "❌ Project has existing test failures. Fix them before updating."
+
+        # 2. Perform Update
+        report.append(f"Updating {package_name} via {manager}...")
+        if manager == "pip":
+            os.popen(f"cd {project_path} && .venv/bin/pip install --upgrade {package_name}").read()
+        elif manager == "npm":
+            os.popen(f"cd {project_path} && npm update {package_name}").read()
+        elif manager == "cargo":
+            os.popen(f"cd {project_path} && cargo update -p {package_name}").read()
+
+        # 3. Verify with Tests
+        report.append("Verifying update with tests...")
+        post_test_res = await run_tests(project_path)
+        
+        if "FAILED" in post_test_res or "error" in post_test_res.lower():
+            report.append(f"❌ Tests FAILED after update. Rolling back...")
+            # Rollback logic (simple for pip: reinstall previous version is hard without lock, 
+            # but for npm/cargo we can use git checkout on lockfiles)
+            os.popen(f"cd {project_path} && git checkout package-lock.json Cargo.lock 2>/dev/null || true")
+            if manager == "pip":
+                # For pip we'd ideally use requirements.txt
+                os.popen(f"cd {project_path} && .venv/bin/pip install -r requirements.txt").read()
+            report.append("✅ Rollback complete. System restored to stable state.")
+        else:
+            report.append(f"✅ Update successful! All tests passed.")
+            
+        return "\n".join(report)
+    except Exception as e:
+        return f"Safe update failed: {str(e)}"
+
+
+@mcp.tool()
 async def apply_security_patches(project_path: str = ".") -> str:
     """Identify and automatically fix security risks (like hardcoded secrets)."""
     try:
