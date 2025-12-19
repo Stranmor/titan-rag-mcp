@@ -202,10 +202,19 @@ def get_config_from_env():
     cwd = os.getcwd()
     projects_root = os.getenv("PROJECTS_ROOT", os.path.dirname(cwd))
     
-    # If FOLDERS_TO_INDEX is not set, use the base name of the current directory
+    # If FOLDERS_TO_INDEX is not set, perform auto-discovery of git repos
     folders_to_index_str = os.getenv("FOLDERS_TO_INDEX", "")
     if not folders_to_index_str:
-        folders_to_index = [os.path.basename(cwd)]
+        logger.info(f"FOLDERS_TO_INDEX not set. Scanning {projects_root} for git repositories...")
+        folders_to_index = []
+        try:
+            for entry in os.scandir(projects_root):
+                if entry.is_dir() and os.path.exists(os.path.join(entry.path, ".git")):
+                    folders_to_index.append(entry.name)
+            logger.info(f"Auto-discovered {len(folders_to_index)} projects: {', '.join(folders_to_index)}")
+        except Exception as e:
+            logger.error(f"Auto-discovery failed: {e}")
+            folders_to_index = [os.path.basename(cwd)]
     else:
         folders_to_index = [f.strip() for f in folders_to_index_str.split(",") if f.strip()]
 
