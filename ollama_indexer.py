@@ -1046,12 +1046,27 @@ async def index_projects():
         observers.clear()
 
 
+@mcp.tool()
+async def list_indexed_projects() -> str:
+    """List all projects currently indexed in Titan RAG."""
+    try:
+        collections = chroma_client.list_collections()
+        projects = []
+        for col_name in collections:
+            # Try to get count for each
+            col = chroma_client.get_collection(col_name)
+            projects.append({"name": col_name, "chunks": col.count()})
+        return json.dumps({"indexed_projects": projects}, indent=2)
+    except Exception as e:
+        return f"Failed to list projects: {str(e)}"
+
+
 @mcp.tool(
     name="rag_search_code",
     description="""Search code using our custom Titan RAG pipeline (Ollama + ChromaDB).
         Args:
             query: Natural language query about the codebase
-            project: Collection/folder name to search in. Use the current workspace name.
+            project: Collection/folder name to search in. Use 'all' to search everywhere.
             keywords: Optional comma-separated list of exact keywords to filter results.
             file_pattern: Optional glob-like pattern to filter file paths (e.g., 'scripts/*').
             language_filter: Optional specific language to search for (e.g., 'python').
@@ -1070,7 +1085,7 @@ async def rag_search_code(
     threshold: float = 30.0
 ) -> str:
     try:
-        # ... (keep existing initialization and collection matching)
+        # ... (keep initialization check)
         if not chroma_client or not embedding_function:
             logger.error("ChromaDB client or embedding function not initialized")
             return json.dumps({
@@ -1085,10 +1100,14 @@ async def rag_search_code(
         # Find matching collections
         matching_collections = []
         project_name = project.lower()
-        for collection_name in collection_names:
-            collection_parts = collection_name.lower().split('_')
-            if collection_parts[-1] == project_name:
-                matching_collections.append(collection_name)
+        
+        if project_name == "all":
+            matching_collections = collection_names
+        else:
+            for collection_name in collection_names:
+                collection_parts = collection_name.lower().split('_')
+                if collection_parts[-1] == project_name:
+                    matching_collections.append(collection_name)
 
         if not matching_collections:
             logger.error(f"No collections found matching project {project}")
