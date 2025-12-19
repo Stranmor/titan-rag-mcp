@@ -1270,6 +1270,61 @@ async def run_in_sandbox(command: str, path: str = ".") -> str:
 
 
 @mcp.tool()
+async def generate_unit_tests(file_path: str) -> str:
+    """Analyze a file and generate a corresponding unit test file using AI."""
+    try:
+        if not os.path.exists(file_path):
+            return f"File {file_path} not found."
+
+        with open(file_path, 'r') as f:
+            code = f.read()
+
+        base, ext = os.path.splitext(file_path)
+        framework = "pytest" if ext == ".py" else "cargo test" if ext == ".rs" else "jest"
+        
+        prompt = f"""You are a QA Engineer. Generate a comprehensive unit test file for the following code.
+Use the {framework} framework. Include edge cases and mock dependencies where necessary.
+Return ONLY the complete test code. No explanations, no markdown blocks.
+
+Original File: {file_path}
+Code:
+{code}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {'temperature': 0.1}
+                }, timeout=150.0)
+        
+        test_code = response.json().get('response', '').strip()
+        
+        # Clean up markdown
+        if test_code.startswith("```"):
+            test_code = "\n".join(test_code.split("\n")[1:-1])
+
+        if len(test_code) < 10:
+            return "AI failed to generate tests."
+
+        # Save to a new test file
+        test_file_path = f"test_{os.path.basename(file_path)}"
+        if ext == ".py" and not test_file_path.startswith("test_"):
+            test_file_path = f"test_{os.path.basename(file_path)}"
+        
+        test_full_path = os.path.join(os.path.dirname(file_path), test_file_path)
+        
+        with open(test_full_path, 'w') as f:
+            f.write(test_code)
+            
+        return f"Successfully generated unit tests at {test_full_path}. Run 'run_tests' to verify."
+    except Exception as e:
+        return f"Test generation failed: {str(e)}"
+
+
+@mcp.tool()
 async def migrate_code(file_path: str, target_standard: str) -> str:
     """Use AI to migrate or modernize code in a specific file.
     Args:
