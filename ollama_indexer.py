@@ -1301,8 +1301,41 @@ async def rag_search_code(
         # Sort results by relevance
         all_results.sort(key=lambda x: x["relevance"], reverse=True)
 
-        # Take top n_results
-        final_results = all_results[:n_results]
+        # Take top candidates for re-ranking
+        candidates = all_results[:15]
+        if not candidates:
+            return json.dumps({"results": [], "total_results": 0})
+
+        # Re-ranking stage (Titan Class Innovation)
+        # We ask the LLM to score the candidates
+        reranked_results = []
+        for cand in candidates:
+            try:
+                # Prepare a scoring prompt
+                prompt = f"Query: {query}\n\nCode Snippet from {cand['file_path']}:\n{cand['text']}\n\nTask: Rate the relevance of this snippet to the query from 0 to 100. Output ONLY the number."
+                
+                response = requests.post('http://localhost:11434/api/generate',
+                    json={
+                        'model': 'qwen2.5-coder:1.5b',
+                        'prompt': prompt,
+                        'stream': False,
+                        'options': {'num_predict': 5, 'temperature': 0}
+                    }, timeout=10)
+                
+                score_str = response.json().get('response', '0').strip()
+                # Extract digits only
+                import re
+                score_match = re.search(r'\d+', score_str)
+                score = int(score_match.group()) if score_match else 0
+                
+                cand["relevance"] = score # Override with LLM score
+                reranked_results.append(cand)
+            except:
+                reranked_results.append(cand) # Fallback to original score
+
+        # Sort by new scores and take top n_results
+        reranked_results.sort(key=lambda x: x["relevance"], reverse=True)
+        final_results = reranked_results[:n_results]
 
         return json.dumps({
             "results": final_results,
