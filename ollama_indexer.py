@@ -941,6 +941,17 @@ async def autopilot_fix(file_path: str) -> str:
 
 
 @mcp.tool()
+async def summarize_changes(ref1: str = "HEAD~1", ref2: str = "HEAD") -> str:
+    """Provide a semantic AI-powered summary of git changes between two refs."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-diff.sh")
+        result = os.popen(f"bash {script_path} {ref1} {ref2}").read()
+        return result
+    except Exception as e:
+        return f"Diff summary failed: {str(e)}"
+
+
+@mcp.tool()
 async def ai_fix_code(file_path: str, error_message: str) -> str:
     """Use AI to fix a specific error in a file.
     Args:
