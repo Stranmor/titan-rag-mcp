@@ -1303,6 +1303,17 @@ async def prune_orphaned_chunks(project: str) -> str:
 
 
 @mcp.tool()
+async def simulate_pr_review(target_branch: str = "main") -> str:
+    """Perform a Staff Engineer level PR review of all changes in the current branch."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-pr-audit.sh")
+        result = os.popen(f"bash {script_path} {target_branch}").read()
+        return result
+    except Exception as e:
+        return f"PR Review failed: {str(e)}"
+
+
+@mcp.tool()
 async def assess_project_risks(project_path: str = ".") -> str:
     """Perform a deep AI-driven risk assessment of the project's architecture and quality."""
     try:
