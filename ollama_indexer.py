@@ -903,6 +903,7 @@ async def index_projects():
         Args:
             query: Natural language query about the codebase
             project: Collection/folder name to search in. Use the current workspace name.
+            keywords: Optional comma-separated list of exact keywords to filter results.
             n_results: Number of results to return (default: 5)
             threshold: Minimum relevance percentage to include results 
                 (default: 30.0)
@@ -911,10 +912,12 @@ async def index_projects():
 async def rag_search_code(
     query: str,
     project: str,
+    keywords: str = None,
     n_results: int = 5,
     threshold: float = 30.0
 ) -> str:
     try:
+        # ... (keep existing initialization checks)
         if not chroma_client or not embedding_function:
             logger.error("ChromaDB client or embedding function not initialized")
             return json.dumps({
@@ -930,8 +933,6 @@ async def rag_search_code(
         matching_collections = []
         project_name = project.lower()
         for collection_name in collection_names:
-            # The collection name might be in format "customerX_project1" or just "project1"
-            # We want to match if project_name fully matches the part after the last _ (if any)
             collection_parts = collection_name.lower().split('_')
             if collection_parts[-1] == project_name:
                 matching_collections.append(collection_name)
@@ -944,6 +945,15 @@ async def rag_search_code(
                 "total_results": 0
             })
 
+        # Prepare keyword filter
+        where_filter = None
+        if keywords:
+            kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+            if len(kw_list) == 1:
+                where_filter = {"text": {"$contains": kw_list[0]}}
+            elif len(kw_list) > 1:
+                where_filter = {"$and": [{"text": {"$contains": k}} for k in kw_list]}
+
         # Search in all matching collections and combine results
         all_results = []
 
@@ -953,9 +963,13 @@ async def rag_search_code(
                 embedding_function=embedding_function
             )
 
+            # Note: ChromaDB $contains filter works on the document text if supported by version,
+            # otherwise we filter manually. For robustness, we'll use collection.query
+            # and then filter in Python if keywords are provided.
+            
             results = collection.query(
                 query_texts=[query],
-                n_results=n_results,
+                n_results=n_results * 2 if keywords else n_results,
                 include=["documents", "metadatas", "distances"]
             )
 
@@ -965,6 +979,15 @@ async def rag_search_code(
                     results["metadatas"][0],
                     results["distances"][0]
                 ):
+                    # Manual keyword filtering for maximum reliability
+                    if keywords:
+                        skip = False
+                        for kw in kw_list:
+                            if kw.lower() not in doc.lower():
+                                skip = True
+                                break
+                        if skip: continue
+
                     similarity = (1 - distance) * 100
                     if similarity >= threshold:
                         all_results.append({
