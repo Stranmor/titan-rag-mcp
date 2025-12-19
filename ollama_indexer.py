@@ -546,6 +546,37 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def check_code_quality(project_path: str = ".") -> str:
+    """Run linters (ruff, cargo clippy) on the project and report errors."""
+    results = []
+    
+    # 1. Python (Ruff)
+    if os.path.exists(os.path.join(project_path, "requirements.txt")) or any(f.endswith(".py") for f in os.listdir(project_path)):
+        res = os.popen(f"ruff check {project_path} 2>&1").read()
+        results.append(f"--- Python (Ruff) ---\n{res or 'All good!'}")
+
+    # 2. Rust (Clippy)
+    if os.path.exists(os.path.join(project_path, "Cargo.toml")):
+        res = os.popen(f"cd {project_path} && cargo clippy -- -D warnings 2>&1").read()
+        results.append(f"--- Rust (Clippy) ---\n{res or 'All good!'}")
+
+    return "\n\n".join(results)
+
+
+@mcp.tool()
+async def fix_code_quality(project_path: str = ".") -> str:
+    """Automatically apply linter fixes (ruff --fix) to the codebase."""
+    results = []
+    
+    # 1. Python (Ruff Fix)
+    if os.path.exists(os.path.join(project_path, "requirements.txt")):
+        res = os.popen(f"ruff check --fix {project_path} 2>&1").read()
+        results.append(f"--- Python (Ruff Fix Applied) ---\n{res or 'No fixes needed.'}")
+
+    return "\n\n".join(results)
+
+
+@mcp.tool()
 async def find_related_files(file_path: str, n_results: int = 5) -> str:
     """Find files that are semantically related to the given file path."""
     try:
