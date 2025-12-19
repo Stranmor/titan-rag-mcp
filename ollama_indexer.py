@@ -673,6 +673,17 @@ Hardware Health: {health}
 
 
 @mcp.tool()
+async def audit_security(project_path: str = ".") -> str:
+    """Scan the project for hardcoded secrets, API keys, and security risks."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-audit.sh")
+        result = os.popen(f"bash {script_path} {project_path}").read()
+        return result
+    except Exception as e:
+        return f"Security audit failed: {str(e)}"
+
+
+@mcp.tool()
 async def audit_dependencies(project_path: str = ".") -> str:
     """Scan for outdated or vulnerable dependencies in the project."""
     results = []
@@ -762,6 +773,29 @@ async def check_code_quality(project_path: str = ".") -> str:
         results.append(f"--- Rust (Clippy) ---\n{res or 'All good!'}")
 
     return "\n\n".join(results)
+
+
+@mcp.tool()
+async def send_notification(title: str, message: str, level: str = "normal") -> str:
+    """Send a system notification to the user.
+    Args:
+        title: Short title of the notification.
+        message: Detailed message content.
+        level: Urgency level ('low', 'normal', 'critical').
+    """
+    try:
+        icon = "dialog-information"
+        if level == "critical": icon = "dialog-error"
+        elif level == "low": icon = "dialog-information"
+        
+        # We escape quotes for safety in os.system
+        safe_title = title.replace('"', '\\"')
+        safe_message = message.replace('"', '\\"')
+        
+        os.system(f'notify-send -u {level} -i {icon} "Titan: {safe_title}" "{safe_message}"')
+        return "Notification sent successfully."
+    except Exception as e:
+        return f"Failed to send notification: {str(e)}"
 
 
 @mcp.tool()
