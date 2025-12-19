@@ -546,6 +546,68 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def find_related_files(file_path: str, n_results: int = 5) -> str:
+    """Find files that are semantically related to the given file path."""
+    try:
+        # First, find a sample chunk from the source file to get its context
+        collection_names = chroma_client.list_collections()
+        # Find which collection contains this project (simple heuristic)
+        matching_collection = None
+        for name in collection_names:
+            if name in file_path:
+                matching_collection = name
+                break
+        
+        if not matching_collection:
+            # Fallback: search across all collections
+            matching_collection = collection_names[0] if collection_names else None
+
+        if not matching_collection:
+            return "No collections found."
+
+        collection = chroma_client.get_collection(
+            name=matching_collection,
+            embedding_function=embedding_function
+        )
+
+        # Get top chunks from the source file
+        source_res = collection.get(
+            where={"file_path": file_path},
+            limit=3,
+            include=["documents", "embeddings"]
+        )
+
+        if not source_res["documents"]:
+            return f"Source file {file_path} not found in index."
+
+        # Search for similar chunks excluding the source file itself
+        results = collection.query(
+            query_texts=[source_res["documents"][0]],
+            n_results=n_results + 5, # Fetch more to filter
+            where={"file_path": {"$ne": file_path}},
+            include=["metadatas", "distances"]
+        )
+
+        related_files = {}
+        if results["metadatas"] and results["metadatas"][0]:
+            for meta, dist in zip(results["metadatas"][0], results["distances"][0]):
+                f_path = meta.get("file_path", "Unknown")
+                score = round((1 - dist) * 100, 1)
+                if f_path not in related_files or score > related_files[f_path]:
+                    related_files[f_path] = score
+
+        # Sort and take top N
+        sorted_files = sorted(related_files.items(), key=lambda x: x[1], reverse=True)[:n_results]
+        
+        return json.dumps({
+            "related_files": [{"path": f, "relevance": s} for f, s in sorted_files]
+        }, indent=2)
+
+    except Exception as e:
+        return f"Relation search failed: {str(e)}"
+
+
+@mcp.tool()
 async def update_project_memory(category: str, content: str) -> str:
     """Add a new entry to the project memory (AGENTS.md).
     Args:
