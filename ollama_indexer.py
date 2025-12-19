@@ -945,6 +945,42 @@ async def release_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def find_reusable_logic(query: str, current_project: str) -> str:
+    """Find similar logic in other projects to avoid rewriting existing code.
+    Args:
+        query: Description of the logic or a code snippet to search for.
+        current_project: The project to EXCLUDE from search results.
+    """
+    try:
+        # We use our global search logic but filter out the current project
+        all_res_json = await rag_search_code(query=query, project="all", n_results=10)
+        all_res = json.loads(all_res_json)
+        
+        if "results" not in all_res:
+            return "No reusable logic found."
+
+        # Filter out current project and low relevance
+        external_results = [
+            r for r in all_res["results"] 
+            if current_project.lower() not in r.get("file_path", "").lower()
+        ]
+
+        if not external_results:
+            return f"No similar logic found in other projects. You are clear to implement it in {current_project}."
+
+        report = [f"🔍 Found potential reusable logic in other projects:"]
+        for res in external_results[:5]:
+            report.append(f"\n--- From Project: {res.get('file_path').split('/')[0]} ---")
+            report.append(f"File: {res.get('file_path')}")
+            report.append(f"Relevance: {res.get('relevance')}%")
+            report.append(f"Snippet:\n{res.get('text')[:300]}...")
+
+        return "\n".join(report)
+    except Exception as e:
+        return f"Search for reusable logic failed: {str(e)}"
+
+
+@mcp.tool()
 async def execute_autonomous_workflow(project_path: str = ".") -> str:
     """Run a full autonomous cycle: Quality check, Tests, Security audit, and Commit."""
     steps = [
