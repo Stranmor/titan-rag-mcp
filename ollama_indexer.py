@@ -546,6 +546,17 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def diagnose_zed() -> str:
+    """Execute the Zed diagnostic utility to check and fix profile issues."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/zed/zed-diagnose.sh")
+        result = os.popen(f"bash {script_path}").read()
+        return result
+    except Exception as e:
+        return f"Diagnostic failed: {str(e)}"
+
+
+@mcp.tool()
 async def cleanup_system() -> str:
     """Execute the Titan Janitor cleanup utility to rotate logs and clean temp files."""
     try:
