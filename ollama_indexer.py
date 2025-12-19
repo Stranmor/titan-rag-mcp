@@ -1270,6 +1270,68 @@ async def run_in_sandbox(command: str, path: str = ".") -> str:
 
 
 @mcp.tool()
+async def prune_orphaned_chunks(project: str) -> str:
+    """Clean up the index by removing chunks for files that no longer exist on disk."""
+    try:
+        collection = chroma_client.get_collection(
+            name=sanitize_collection_name(project),
+            embedding_function=embedding_function
+        )
+        
+        # Get all unique file paths in the collection
+        results = collection.get(include=["metadatas"])
+        if not results["metadatas"]:
+            return "Collection is empty."
+
+        unique_files = {m["file_path"] for m in results["metadatas"]}
+        orphaned = []
+        
+        for rel_path in unique_files:
+            abs_path = os.path.join(config["projects_root"], project, rel_path)
+            if not os.path.exists(abs_path):
+                orphaned.append(rel_path)
+
+        if not orphaned:
+            return "No orphaned chunks found. Index is clean."
+
+        for rel_path in orphaned:
+            collection.delete(where={"file_path": rel_path})
+            
+        return f"Successfully pruned {len(orphaned)} orphaned files from index."
+    except Exception as e:
+        return f"Pruning failed: {str(e)}"
+
+
+@mcp.tool()
+async def summarize_context(query: str, context_json: str) -> str:
+    """Compress multiple search results into a dense, high-token-efficiency summary."""
+    try:
+        data = json.loads(context_json)
+        snippets = "\n---\n".join([f"File: {r['file_path']}\n{r['text']}" for r in data.get("results", [])])
+        
+        prompt = f"""Summarize the following code snippets relative to the query: "{query}".
+Extract only the essential logic, function signatures, and key architectural points.
+Be extremely dense. Focus on facts.
+
+Snippets:
+{snippets}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'qwen2.5-coder:1.5b',
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {'temperature': 0}
+                }, timeout=60.0)
+        
+        return response.json().get('response', 'Failed to summarize.')
+    except Exception as e:
+        return f"Summarization failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_release_notes(since: str = "7 days ago") -> str:
     """Generate professional Release Notes from git history using AI.
     Args:
