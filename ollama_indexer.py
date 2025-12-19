@@ -546,6 +546,21 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def read_mcp_logs(lines: int = 50) -> str:
+    """Read the last N lines of the MCP server log file."""
+    try:
+        log_path = os.path.join(os.path.dirname(__file__), "mcp_server.log")
+        if not os.path.exists(log_path):
+            return "Log file not found."
+        
+        with open(log_path, 'r') as f:
+            content = f.readlines()
+            return "".join(content[-lines:])
+    except Exception as e:
+        return f"Failed to read logs: {str(e)}"
+
+
+@mcp.tool()
 async def diagnose_zed() -> str:
     """Execute the Zed diagnostic utility to check and fix profile issues."""
     try:
