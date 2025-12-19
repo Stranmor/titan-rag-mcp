@@ -1200,6 +1200,17 @@ async def read_mcp_logs(lines: int = 50) -> str:
 
 
 @mcp.tool()
+async def fix_system_services() -> str:
+    """Automatically identify and restart failed Titan system services."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/tcc.sh")
+        result = os.popen(f"bash {script_path} fix").read()
+        return result
+    except Exception as e:
+        return f"Self-healing failed: {str(e)}"
+
+
+@mcp.tool()
 async def diagnose_zed() -> str:
     """Execute the Zed diagnostic utility to check and fix profile issues."""
     try:
