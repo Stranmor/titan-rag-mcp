@@ -547,6 +547,33 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def generate_commit_message() -> str:
+    """Analyze staged git changes and generate a professional commit message."""
+    try:
+        # Get staged changes
+        diff = os.popen("git diff --cached").read()
+        if not diff:
+            return "No staged changes found. Use 'git add' first."
+
+        # Limit diff size to avoid context overflow (take first 4000 chars)
+        diff_snippet = diff[:4000]
+        
+        prompt = f"Generate a professional commit message in Conventional Commits format based on this diff. Keep it concise but descriptive. Output ONLY the message.\n\nDiff:\n{diff_snippet}"
+        
+        import requests
+        response = requests.post('http://localhost:11434/api/generate',
+            json={
+                'model': 'vibethinker',
+                'prompt': prompt,
+                'stream': False
+            }, timeout=45)
+        
+        return response.json().get('response', 'AI failed to generate commit message.').strip()
+    except Exception as e:
+        return f"Commit message generation failed: {str(e)}"
+
+
+@mcp.tool()
 async def analyze_workspace(path: str = ".") -> str:
     """Analyze the workspace structure and suggest the best Zed profile and tech stack."""
     try:
