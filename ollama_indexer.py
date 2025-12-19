@@ -931,6 +931,19 @@ async def claim_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def broadcast_agent_message(agent_id: str, message: str) -> str:
+    """Send a message to other agents in the swarm via the common log."""
+    try:
+        log_path = os.path.expanduser("~/.titan-swarm-comms.log")
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(log_path, 'a') as f:
+            f.write(f"[{timestamp}] [AGENT {agent_id}] {message}\n")
+        return "Message broadcasted to the swarm."
+    except Exception as e:
+        return f"Broadcast failed: {str(e)}"
+
+
+@mcp.tool()
 async def release_active_zone(agent_id: str, zone_name: str) -> str:
     """Release a previously claimed code zone."""
     try:
