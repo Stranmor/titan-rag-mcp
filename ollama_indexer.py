@@ -547,25 +547,51 @@ def process_and_index_documents(
 
 @mcp.tool()
 async def get_system_health() -> str:
-    """Get the current system health status (GPU, VRAM, Disk)."""
-    health = {"gpu": "Unknown", "vram": "Unknown", "disk": "Unknown"}
+    """Get the current system health status (GPU Temperature, VRAM, Power, Disk, Load)."""
+    health = {
+        "status": "Healthy",
+        "gpu": {},
+        "system": {},
+        "disk": {}
+    }
     
     try:
         # Check GPU status via rocm-smi
-        gpu_info = os.popen("rocm-smi --showuse --showmeminfo vram --json").read()
-        health["gpu_details"] = json.loads(gpu_info)
-        health["gpu"] = "Healthy"
+        # We parse specific fields for better clarity
+        gpu_data = os.popen("rocm-smi --showuse --showmeminfo vram --showtemp --showpower --json").read()
+        raw_gpu = json.loads(gpu_data)
+        
+        # Simplify the output for the agent
+        for gpu_id, metrics in raw_gpu.items():
+            health["gpu"][gpu_id] = {
+                "usage_pct": metrics.get("GPU use (%)"),
+                "vram_used_bytes": metrics.get("VRAM Total Used Memory (B)"),
+                "vram_total_bytes": metrics.get("VRAM Total Memory (B)"),
+                "temperature_c": metrics.get("Temperature (Sensor edge) (C)"),
+                "power_w": metrics.get("Current Socket Graphics Package Power (W)")
+            }
+    except Exception as e:
+        health["gpu"]["error"] = str(e)
+
+    try:
+        # System Load and Memory
+        load1, load5, load15 = os.getloadavg()
+        health["system"]["load_average"] = [load1, load5, load15]
+        
+        import psutil
+        mem = psutil.virtual_memory()
+        health["system"]["memory_free_gb"] = round(mem.available / (1024**3), 2)
     except Exception:
-        health["gpu"] = "Error or ROCm not available"
+        pass
 
     try:
         # Check Disk space for PROJECTS_ROOT
         projects_path = config.get("projects_root", ".")
         disk = os.statvfs(projects_path)
         free_gb = (disk.f_bavail * disk.f_frsize) / (1024**3)
-        health["disk"] = f"{free_gb:.2f} GB free"
+        health["disk"]["free_gb"] = round(free_gb, 2)
     except Exception:
-        health["disk"] = "Error checking disk"
+        health["disk"]["error"] = "Error checking disk"
 
     return json.dumps(health, indent=2)
 
