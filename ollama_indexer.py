@@ -546,6 +546,54 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def update_project_memory(category: str, content: str) -> str:
+    """Add a new entry to the project memory (AGENTS.md).
+    Args:
+        category: The section to update (e.g., 'ADR', 'TASK', 'KNOWLEDGE').
+        content: The text content to add.
+    """
+    try:
+        # Find the root AGENTS.md
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        agents_md_path = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "AGENTS.md")
+        
+        if not os.path.exists(agents_md_path):
+            return f"AGENTS.md not found at {agents_md_path}"
+
+        date_str = time.strftime("%Y-%m-%d")
+        new_entry = f"- [{date_str}] **{category}:** {content}\n"
+
+        # Read and insert based on category
+        with open(agents_md_path, 'r') as f:
+            lines = f.readlines()
+
+        # Simple logic: append to the end of the corresponding section
+        # or just at the end if not found
+        insert_idx = len(lines)
+        category_upper = category.upper()
+        
+        for i, line in enumerate(lines):
+            if category_upper in line.upper() and line.startswith("##"):
+                # Found the section, look for the next section or end
+                for j in range(i + 1, len(lines)):
+                    if lines[j].startswith("##"):
+                        insert_idx = j
+                        break
+                else:
+                    insert_idx = len(lines)
+                break
+        
+        lines.insert(insert_idx, new_entry)
+
+        with open(agents_md_path, 'w') as f:
+            f.writelines(lines)
+
+        return f"Successfully updated project memory in {category}."
+    except Exception as e:
+        return f"Failed to update memory: {str(e)}"
+
+
+@mcp.tool()
 async def get_project_map() -> str:
     """Get a high-level overview of the current project (files, git, stack)."""
     project_map = {
