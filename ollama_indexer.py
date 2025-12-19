@@ -547,6 +547,17 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def find_todos(project_path: str = ".") -> str:
+    """Scan the project for TODO, FIXME, and HACK comments."""
+    try:
+        cmd = f"grep -rnE 'TODO|FIXME|HACK' {project_path} --exclude-dir='.git' --exclude-dir='node_modules' --exclude-dir='.venv' --exclude-dir='chroma_db'"
+        res = os.popen(cmd).read()
+        return f"📝 Technical Debt Found:\n{res or 'No TODOs found. Perfect!'}"
+    except Exception as e:
+        return f"Scan failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_commit_message() -> str:
     """Analyze staged git changes and generate a professional commit message."""
     try:
