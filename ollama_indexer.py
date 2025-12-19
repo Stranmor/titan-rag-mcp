@@ -165,13 +165,14 @@ class CodeIndexerEventHandler(FileSystemEventHandler):
                 # Update metadata with relative path
                 documents[0].metadata["file_path"] = rel_path
 
-                # Process and index the document
-                process_and_index_documents(
+                # Run heavy processing in a thread to keep MCP responsive
+                asyncio.create_task(asyncio.to_thread(
+                    process_and_index_documents,
                     documents,
                     self.collection_name,
                     "chroma_db"
-                )
-                logger.info(f"Indexed updated file: {rel_path}")
+                ))
+                logger.info(f"Indexing task started for: {rel_path}")
         except Exception as e:
             logger.error(f"Error processing file {file_path}: {e}")
 
@@ -687,6 +688,34 @@ async def update_project_memory(category: str, content: str) -> str:
 
 
 @mcp.tool()
+async def get_git_hotspots(days: int = 7) -> str:
+    """Find the most frequently changed files in the last N days."""
+    try:
+        cmd = f'git log --name-only --since="{days} days ago" | grep -v "^$" | sort | uniq -c | sort -rn | head -n 10'
+        res = os.popen(cmd).read()
+        return f"🔥 Git Hotspots (Last {days} days):\n{res or 'No changes found'}"
+    except Exception as e:
+        return f"Failed to get hotspots: {str(e)}"
+
+
+@mcp.tool()
+async def get_project_stats() -> str:
+    """Get summary statistics of the current RAG index."""
+    try:
+        stats = {"total_collections": 0, "collections": {}}
+        collections = chroma_client.list_collections()
+        stats["total_collections"] = len(collections)
+        
+        for name in collections:
+            col = chroma_client.get_collection(name)
+            stats["collections"][name] = {"count": col.count()}
+            
+        return json.dumps(stats, indent=2)
+    except Exception as e:
+        return f"Failed to get stats: {str(e)}"
+
+
+@mcp.tool()
 async def get_project_map() -> str:
     """Get a high-level overview of the current project (files, git, stack, VRAM)."""
     project_map = {
@@ -697,8 +726,11 @@ async def get_project_map() -> str:
     }
     
     try:
-        # 1. File Structure (Top level)
-        project_map["structure"] = os.popen("tree -L 2 --noreport -I 'node_modules|.git|.venv|chroma_db'").read()
+        # 1. File Structure (with fallback)
+        structure = os.popen("tree -L 2 --noreport -I 'node_modules|.git|.venv|chroma_db' 2>/dev/null").read()
+        if not structure:
+            structure = os.popen("ls -R | head -n 20").read() + "\n(tree command not found, showing ls fallback)"
+        project_map["structure"] = structure
         
         # 2. Git History
         project_map["git_history"] = os.popen("git log -n 5 --oneline 2>/dev/null").read() or "No git history found"
