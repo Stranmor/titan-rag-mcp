@@ -58,6 +58,15 @@ Add the server to your MCP configuration:
 
 - `rag_search_code`: Search your codebase using natural language.
 - `get_index_status`: Check if indexing is completed or still running in the background.
+- `get_system_health`: Monitor GPU temperature, VRAM usage, and system load.
+
+## 🧪 Testing
+
+To verify your installation and connection to Ollama:
+```bash
+source .venv/bin/activate
+python test_rag.py
+```
 
 ## 🛡 License
 This project is licensed under the terms of the original repository (AGPLv3/MIT). See the LICENSE file for details.
