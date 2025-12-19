@@ -695,6 +695,24 @@ async def get_system_health() -> str:
         import psutil
         mem = psutil.virtual_memory()
         health["system"]["memory_free_gb"] = round(mem.available / (1024**3), 2)
+
+        # Active Zed Profiles
+        health["zed_profiles"] = []
+        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+            if proc.info['name'] == 'firejail' and proc.info['cmdline'] and 'zed-isolated' in " ".join(proc.info['cmdline']):
+                cmd_str = " ".join(proc.info['cmdline'])
+                import re
+                match = re.search(r'zed-isolated-([^-]+)', cmd_str)
+                p_name = match.group(1) if match else "unknown"
+                
+                try:
+                    p = psutil.Process(proc.info['pid'])
+                    health["zed_profiles"].append({
+                        "name": p_name,
+                        "cpu_pct": p.cpu_percent(),
+                        "ram_mb": round(p.memory_info().rss / (1024**2), 1)
+                    })
+                except: pass
     except Exception:
         pass
 
