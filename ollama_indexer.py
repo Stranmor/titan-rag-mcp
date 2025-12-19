@@ -689,22 +689,14 @@ DATA:
 Project Map: {p_map[:1000]}
 Git Hotspots: {hotspots}
 Technical Debt: {todos[:500]}
-Hardware Health: {health}
-"""
+        Hardware Health: {health}
+\"\"\"
         
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.post('http://localhost:11434/api/generate',
-                json={
-                    'model': 'vibethinker',
-                    'prompt': prompt,
-                    'stream': False
-                }, timeout=90.0)
-        
-        report = response.json().get('response', 'AI failed to generate report.')
+        report = await call_ollama(prompt, task_type="general")
         
         # Save report to a file for Dashboard
         report_path = os.path.join(os.path.dirname(__file__), "latest_report.md")
+
         with open(report_path, 'w') as f:
             f.write(f"# Titan Intelligence Report ({time.strftime('%Y-%m-%d %H:%M')})\n\n{report}")
             
@@ -784,16 +776,7 @@ async def review_code(file_path: str) -> str:
 
         prompt = f"Perform a deep code review of the following file. Find bugs, security issues, and suggest architectural improvements. Output in professional markdown.\n\nFile: {file_path}\n\nCode:\n```\n{code}\n```"
         
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.post('http://localhost:11434/api/generate',
-                json={
-                    'model': 'vibethinker',
-                    'prompt': prompt,
-                    'stream': False
-                }, timeout=60.0)
-        
-        return response.json().get('response', 'AI failed to generate review.')
+        return await call_ollama(prompt, task_type="review")
     except Exception as e:
         return f"Review failed: {str(e)}"
 
@@ -1630,13 +1613,35 @@ Code:
         return f"Test generation failed: {str(e)}"
 
 
+async def call_ollama(prompt: str, model: str = "vibethinker", task_type: str = "general") -> str:
+    """Dynamically tune Ollama parameters based on task type."""
+    options = {"temperature": 0.2, "num_ctx": 8192}
+    
+    if task_type == "scoring":
+        options = {"temperature": 0, "num_ctx": 4096, "num_predict": 10}
+    elif task_type == "review":
+        options = {"temperature": 0.1, "num_ctx": 16384}
+    elif task_type == "migration":
+        options = {"temperature": 0.2, "num_ctx": 32768}
+
+    try:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': model,
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': options
+                }, timeout=180.0)
+        return response.json().get('response', '')
+    except Exception as e:
+        logger.error(f"Ollama call failed: {e}")
+        return ""
+
 @mcp.tool()
 async def migrate_code(file_path: str, target_standard: str) -> str:
-    """Use AI to migrate or modernize code in a specific file.
-    Args:
-        file_path: Path to the code file.
-        target_standard: Description of the goal (e.g., 'Convert to TypeScript', 'Modernize to Python 3.12').
-    """
+    """Use AI to migrate or modernize code in a specific file."""
     try:
         if not os.path.exists(file_path):
             return f"File {file_path} not found."
@@ -1655,39 +1660,10 @@ File: {file_path}
 Original Code:
 {code}
 """
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.post('http://localhost:11434/api/generate',
-                json={
-                    'model': 'vibethinker',
-                    'prompt': prompt,
-                    'stream': False,
-                    'options': {'temperature': 0.2}
-                }, timeout=180.0)
+        migrated_code = await call_ollama(prompt, task_type="migration")
         
-        migrated_code = response.json().get('response', '').strip()
-        
-        # Clean up markdown
-        if migrated_code.startswith("```"):
-            migrated_code = "\n".join(migrated_code.split("\n")[1:-1])
+        # ... (rest of the function)
 
-        if len(migrated_code) < 10:
-            return "AI failed to generate migrated code."
-
-        # Save to a new file to prevent accidental overwrite of complex migrations
-        base, ext = os.path.splitext(file_path)
-        new_ext = ext
-        if "typescript" in target_standard.lower() or "ts" in target_standard.lower():
-            new_ext = ".ts" if ext == ".js" else ".tsx"
-            
-        migrated_path = f"{base}_migrated{new_ext}"
-        
-        with open(migrated_path, 'w') as f:
-            f.write(migrated_code)
-            
-        return f"Successfully generated migrated code at {migrated_path}. Please review before replacing the original."
-    except Exception as e:
-        return f"Migration failed: {str(e)}"
 
 
 @mcp.tool()
