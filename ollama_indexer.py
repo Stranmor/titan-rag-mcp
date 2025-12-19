@@ -765,6 +765,49 @@ async def check_code_quality(project_path: str = ".") -> str:
 
 
 @mcp.tool()
+async def sync_titan_docs() -> str:
+    """Automatically update TITAN_COMMANDS.md by scanning available MCP tools."""
+    try:
+        current_file = os.path.abspath(__file__)
+        proj_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+        docs_path = os.path.join(proj_root, "docs/system/TITAN_COMMANDS.md")
+        
+        with open(current_file, 'r') as f:
+            lines = f.readlines()
+
+        tools = []
+        import re
+        for i, line in enumerate(lines):
+            if "@mcp.tool(" in line:
+                # Find the function name on next lines
+                for j in range(i + 1, i + 5):
+                    match = re.search(r"async def (\w+)\(", lines[j])
+                    if match:
+                        name = match.group(1)
+                        # Extract first line of docstring
+                        doc = "No description"
+                        if '"""' in lines[j+1]:
+                            doc = lines[j+1].replace('"""', '').strip()
+                        tools.append(f"- `{name}`: {doc}")
+                        break
+        
+        content = "# 🛠 Titan AI Ecosystem: Command Reference\n\n"
+        content += "## 🔎 RAG & AI Tools (Auto-generated)\n"
+        content += "\n".join(sorted(tools))
+        content += "\n\n## 🛡 System & Monitoring\n"
+        content += "- `tcc`: Titan Control Center (status, restart, logs).\n"
+        content += "- `vibe-ui.sh`: Launch the visual dashboard.\n"
+        content += "- `titan-init <path>`: Smart project onboarding.\n"
+        
+        with open(docs_path, 'w') as f:
+            f.write(content)
+            
+        return "TITAN_COMMANDS.md has been synchronized with latest tools."
+    except Exception as e:
+        return f"Sync failed: {str(e)}"
+
+
+@mcp.tool()
 async def claim_active_zone(agent_id: str, zone_name: str) -> str:
     """Claim a specific code zone/module to prevent other agents from editing it.
     Args:
