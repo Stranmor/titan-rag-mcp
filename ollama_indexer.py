@@ -546,6 +546,19 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def force_reindex(folder: str) -> str:
+    """Force a full re-indexing of a specific project folder.
+    Args:
+        folder: Name of the folder within PROJECTS_ROOT to re-index.
+    """
+    success = await perform_initial_indexing(folder)
+    if success:
+        return f"Successfully re-indexed {folder}"
+    else:
+        return f"Failed to re-index {folder}. Check logs for details."
+
+
+@mcp.tool()
 async def get_index_status() -> str:
     """Get the current status of the code indexing process."""
     return json.dumps(indexing_status, indent=2)
