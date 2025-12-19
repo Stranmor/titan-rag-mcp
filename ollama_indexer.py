@@ -607,6 +607,50 @@ async def analyze_workspace(path: str = ".") -> str:
 
 
 @mcp.tool()
+async def generate_report(project_path: str = ".") -> str:
+    """Generate a high-level intelligence report about the project state."""
+    try:
+        # Collect data snippets
+        p_map = await get_project_map()
+        hotspots = await get_git_hotspots(7)
+        todos = await find_todos(project_path)
+        health = await get_system_health()
+        
+        prompt = f"""Act as a Technical Lead. Analyze the following project data and generate a concise report.
+Include: 
+1. Project Pulse (Activity)
+2. Technical Debt & Risks
+3. System Resources Status
+4. Recommendations for next steps.
+
+DATA:
+Project Map: {p_map[:1000]}
+Git Hotspots: {hotspots}
+Technical Debt: {todos[:500]}
+Hardware Health: {health}
+"""
+        
+        import requests
+        response = requests.post('http://localhost:11434/api/generate',
+            json={
+                'model': 'vibethinker',
+                'prompt': prompt,
+                'stream': False
+            }, timeout=90)
+        
+        report = response.json().get('response', 'AI failed to generate report.')
+        
+        # Save report to a file for Dashboard
+        report_path = os.path.join(os.path.dirname(__file__), "latest_report.md")
+        with open(report_path, 'w') as f:
+            f.write(f"# Titan Intelligence Report ({time.strftime('%Y-%m-%d %H:%M')})\n\n{report}")
+            
+        return report
+    except Exception as e:
+        return f"Report generation failed: {str(e)}"
+
+
+@mcp.tool()
 async def audit_dependencies(project_path: str = ".") -> str:
     """Scan for outdated or vulnerable dependencies in the project."""
     results = []
