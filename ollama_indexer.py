@@ -1057,6 +1057,57 @@ async def execute_autonomous_workflow(project_path: str = ".") -> str:
 
 
 @mcp.tool()
+async def generate_architecture_map(project_path: str = ".") -> str:
+    """Analyze project imports and generate a Mermaid.js architecture diagram."""
+    try:
+        connections = []
+        files_processed = 0
+        
+        # Scan for common patterns
+        for root, dirs, files in os.walk(project_path):
+            if any(idir in root for idir in [".git", "node_modules", ".venv", "chroma_db"]):
+                continue
+                
+            for file in files:
+                if file.endswith((".py", ".ts", ".js", ".rs")):
+                    files_processed += 1
+                    path = os.path.join(root, file)
+                    rel_src = os.path.relpath(path, project_path)
+                    
+                    with open(path, 'r', errors='ignore') as f:
+                        content = f.read()
+                        
+                    # Simple regex for imports (Python/JS/TS)
+                    import re
+                    # Python: import X / from X import Y
+                    py_imports = re.findall(r"^(?:from|import)\s+([\w\.]+)", content, re.MULTILINE)
+                    # JS/TS: import ... from 'X' / require('X')
+                    js_imports = re.findall(r"(?:from|require\()\s*['\"]([\w\.\/\-]+)['\"]", content)
+                    
+                    for imp in py_imports + js_imports:
+                        if "/" in imp or "." in imp: # Filter out stdlibs (heuristic)
+                            connections.append(f'    "{rel_src}" --> "{imp}"')
+
+        if not connections:
+            return "No clear architectural connections found."
+
+        # Limit to top connections for readability
+        diagram = "graph TD\n" + "\n".join(list(set(connections))[:50])
+        
+        report = f"""## 🏗️ Architecture Map (Mermaid.js)
+Files processed: {files_processed}
+
+```mermaid
+{diagram}
+```
+
+*Note: Showing top 50 discovered connections for clarity.*"""
+        return report
+    except Exception as e:
+        return f"Architecture mapping failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_docstrings(file_path: str) -> str:
     """Analyze a file and add missing docstrings to functions and classes using AI."""
     try:
