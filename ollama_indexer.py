@@ -607,6 +607,31 @@ async def analyze_workspace(path: str = ".") -> str:
 
 
 @mcp.tool()
+async def audit_dependencies(project_path: str = ".") -> str:
+    """Scan for outdated or vulnerable dependencies in the project."""
+    results = []
+    
+    # 1. Python (pip-audit + pip list --outdated)
+    if os.path.exists(os.path.join(project_path, "requirements.txt")):
+        audit = os.popen(f"pip-audit -r {project_path}/requirements.txt 2>&1").read()
+        outdated = os.popen("pip list --outdated 2>&1").read()
+        results.append(f"--- Python (Audit & Outdated) ---\n{audit}\n\nOutdated:\n{outdated}")
+
+    # 2. Node.js (npm audit + npm outdated)
+    if os.path.exists(os.path.join(project_path, "package.json")):
+        audit = os.popen(f"cd {project_path} && npm audit").read()
+        outdated = os.popen(f"cd {project_path} && npm outdated").read()
+        results.append(f"--- Node.js (Audit & Outdated) ---\n{audit}\n\nOutdated:\n{outdated or 'All up to date.'}")
+
+    # 3. Rust (cargo audit - if installed)
+    if os.path.exists(os.path.join(project_path, "Cargo.toml")):
+        res = os.popen(f"cd {project_path} && cargo audit 2>&1 || echo 'cargo-audit not installed'").read()
+        results.append(f"--- Rust (Audit) ---\n{res}")
+
+    return "\n\n".join(results) or "No project files detected for auditing."
+
+
+@mcp.tool()
 async def run_tests(project_path: str = ".") -> str:
     """Detect and run tests for the project (pytest, cargo test, npm test)."""
     results = []
