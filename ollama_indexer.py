@@ -1101,6 +1101,17 @@ Code:
 
 
 @mcp.tool()
+async def update_ecosystem() -> str:
+    """Pull latest changes from repository and restart all services."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/update-antigravity.sh")
+        result = os.popen(f"bash {script_path}").read()
+        return result
+    except Exception as e:
+        return f"Update failed: {str(e)}"
+
+
+@mcp.tool()
 async def autopilot_fix(file_path: str) -> str:
     """Perform a full autonomous fix cycle on a file: lint, AI-repair, and verify."""
     try:
