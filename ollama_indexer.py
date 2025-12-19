@@ -1303,6 +1303,36 @@ async def prune_orphaned_chunks(project: str) -> str:
 
 
 @mcp.tool()
+async def generate_task_plan(objective: str) -> str:
+    """Break down a complex project goal into atomic, actionable tasks."""
+    try:
+        prompt = f"""You are a Project Architect. Break down the following objective into a logical sequence of 5-8 atomic, actionable tasks.
+For each task, specify:
+1. WHAT needs to be done.
+2. WHY it's needed.
+3. WHICH tool to use.
+
+Objective: {objective}
+
+Output in a clean Markdown checklist format.
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {'temperature': 0.2}
+                }, timeout=90.0)
+        
+        plan = response.json().get('response', 'AI failed to generate plan.')
+        return f"📋 Titan Strategy Plan for: {objective}\n\n{plan}"
+    except Exception as e:
+        return f"Planning failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_docs_site() -> str:
     """Build a professional documentation site using MkDocs and Material theme."""
     try:
