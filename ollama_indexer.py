@@ -880,6 +880,33 @@ async def release_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def autopilot_fix(file_path: str) -> str:
+    """Perform a full autonomous fix cycle on a file: lint, AI-repair, and verify."""
+    try:
+        # 1. Initial Check
+        report = os.popen(f"ruff check {file_path} 2>&1").read()
+        if not report:
+            return f"✨ File {file_path} is already clean. No action needed."
+
+        # 2. Attempt AI Repair
+        logger.info(f"Autopilot: Attempting to fix {file_path}...")
+        fix_res = await ai_fix_code(file_path, report)
+        
+        if "Applied AI fix" not in fix_res:
+            return f"❌ Autopilot failed at repair stage: {fix_res}"
+
+        # 3. Verification
+        new_report = os.popen(f"ruff check {file_path} 2>&1").read()
+        if not new_report:
+            return f"✅ Autopilot successfully fixed {file_path}. File is now clean."
+        else:
+            return f"⚠️ Autopilot applied a partial fix, but some issues remain:\n{new_report}"
+
+    except Exception as e:
+        return f"Autopilot crashed: {str(e)}"
+
+
+@mcp.tool()
 async def ai_fix_code(file_path: str, error_message: str) -> str:
     """Use AI to fix a specific error in a file.
     Args:
