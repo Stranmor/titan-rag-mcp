@@ -1414,6 +1414,46 @@ DATA:
 
 
 @mcp.tool()
+async def explain_code_architecture(file_path: str) -> str:
+    """Perform a deep architectural analysis of a specific file and its role in the project."""
+    try:
+        if not os.path.exists(file_path):
+            return f"File {file_path} not found."
+
+        with open(file_path, 'r') as f:
+            code = f.read()
+
+        # Get related files for context
+        related = await find_related_files(file_path, n_results=3)
+        
+        prompt = f"""You are a Lead Software Architect. Explain the architectural role of the following file.
+Identify:
+1. Primary purpose and responsibility.
+2. Key patterns used (e.g., Singleton, Observer, Asyncio).
+3. Critical dependencies and interfaces.
+4. How it relates to other parts of the system (see context).
+
+CONTEXT (Related files):
+{related}
+
+FILE CONTENT:
+{code[:8000]} # Limit to avoid context overflow
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False
+                }, timeout=120.0)
+        
+        return response.json().get('response', 'AI failed to analyze architecture.')
+    except Exception as e:
+        return f"Architectural analysis failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_task_plan(objective: str) -> str:
     """Break down a complex project goal into atomic, actionable tasks."""
     try:
