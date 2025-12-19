@@ -1414,6 +1414,21 @@ DATA:
 
 
 @mcp.tool()
+async def get_call_graph(file_path: str) -> str:
+    """Generate a Mermaid.js call graph for a Python file."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/generate-call-graph.py")
+        result = os.popen(f"python3 {script_path} {file_path}").read()
+        
+        if "graph" not in result:
+            return result # Probably an error or 'No calls' message
+            
+        return f"## 📞 Call Graph: {os.path.basename(file_path)}\n\n```mermaid\n{result}\n```"
+    except Exception as e:
+        return f"Call graph generation failed: {str(e)}"
+
+
+@mcp.tool()
 async def explain_code_architecture(file_path: str) -> str:
     """Perform a deep architectural analysis of a specific file and its role in the project."""
     try:
