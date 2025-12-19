@@ -955,6 +955,51 @@ async def release_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def profile_code(command: str, project_path: str = ".") -> str:
+    """Execute a command and provide a performance profile (time, CPU, top calls).
+    Args:
+        command: The command to run (e.g., 'python script.py' or 'pytest test_perf.py').
+        project_path: Working directory.
+    """
+    try:
+        import time
+        import subprocess
+        
+        report = [f"⏱️ Profiling execution: {command}"]
+        
+        # We use cProfile for Python commands to get deep insights
+        prof_cmd = command
+        if command.startswith("python"):
+            prof_cmd = command.replace("python", "python -m cProfile -s cumulative", 1)
+        
+        start_time = time.perf_counter()
+        process = subprocess.Popen(
+            f"cd {project_path} && {prof_cmd}",
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate(timeout=60)
+        end_time = time.perf_counter()
+        
+        duration = end_time - start_time
+        report.append(f"Total Duration: {duration:.4f} seconds")
+        
+        if stderr:
+            report.append(f"\n⚠️ Errors during profiling:\n{stderr}")
+        
+        # Extract top 15 lines of cProfile output or raw stdout
+        report.append("\n--- Execution Profile (Top Calls/Output) ---")
+        lines = stdout.splitlines()
+        report.append("\n".join(lines[:30])) # Show more for profiling
+        
+        return "\n".join(report)
+    except Exception as e:
+        return f"Profiling failed: {str(e)}"
+
+
+@mcp.tool()
 async def safe_update_dependency(project_path: str, package_name: str, manager: str = "pip") -> str:
     """Attempt to update a package and rollback if tests fail.
     Args:
