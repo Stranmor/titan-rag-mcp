@@ -1303,6 +1303,17 @@ async def prune_orphaned_chunks(project: str) -> str:
 
 
 @mcp.tool()
+async def generate_docs_site() -> str:
+    """Build a professional documentation site using MkDocs and Material theme."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/generate-docs-site.sh")
+        result = os.popen(f"bash {script_path}").read()
+        return result
+    except Exception as e:
+        return f"Docs generation failed: {str(e)}"
+
+
+@mcp.tool()
 async def summarize_context(query: str, context_json: str) -> str:
     """Compress multiple search results into a dense, high-token-efficiency summary."""
     try:
