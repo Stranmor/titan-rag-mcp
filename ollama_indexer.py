@@ -817,6 +817,17 @@ async def check_code_quality(project_path: str = ".") -> str:
 
 
 @mcp.tool()
+async def titan_speak(text: str) -> str:
+    """Announce a message using the local voice synthesis engine (TTS)."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-speak.sh")
+        os.system(f"bash {script_path} '{text.replace(\"'\", \"\")}'")
+        return f"Announced: {text}"
+    except Exception as e:
+        return f"Speech failed: {str(e)}"
+
+
+@mcp.tool()
 async def send_notification(title: str, message: str, level: str = "normal") -> str:
     """Send a system notification to the user.
     Args:
