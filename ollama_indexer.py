@@ -1314,6 +1314,62 @@ async def prune_orphaned_chunks(project: str) -> str:
 
 
 @mcp.tool()
+async def generate_pr_description(target_branch: str = "main") -> str:
+    """Generate a detailed PR description by analyzing branch changes and project context."""
+    try:
+        diff = os.popen(f"git diff {target_branch}..HEAD").read()[:5000]
+        if not diff: return "No changes detected."
+        
+        # Get context from AGENTS.md
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        agents_md = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "AGENTS.md")
+        tasks = ""
+        if os.path.exists(agents_md):
+            with open(agents_md, 'r') as f:
+                tasks = "\n".join(f.readlines()[:50]) # Take top 50 lines for context
+
+        prompt = f"""Generate a professional Pull Request description based on this diff and project context.
+Include: 
+- High-level summary
+- Detailed list of changes
+- Impact analysis
+- Testing performed
+
+CONTEXT:
+{tasks}
+
+DIFF:
+{diff}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={'model': 'vibethinker', 'prompt': prompt, 'stream': False},
+                timeout=90.0)
+        
+        return response.json().get('response', 'AI failed to generate PR.')
+    except Exception as e:
+        return f"PR generation failed: {str(e)}"
+
+
+@mcp.tool()
+async def query_system_logs(query: str, log_type: str = "all") -> str:
+    """Search across all Titan ecosystem logs (MCP, Guardian, Nightly)."""
+    logs = {
+        "mcp": "/home/stranmor/Documents/ai-assistant/tools/ollama-code-search/mcp_server.log",
+        "guardian": "/var/log/titan-guardian.log",
+        "nightly": "/home/stranmor/Documents/ai-assistant/tools/ollama-code-search/nightly_maintenance.log"
+    }
+    results = []
+    for name, path in logs.items():
+        if log_type == "all" or log_type == name:
+            if os.path.exists(path):
+                res = os.popen(f"grep -i '{query}' {path} | tail -n 10").read()
+                if res: results.append(f"--- {name.upper()} LOGS ---\n{res}")
+    return "\n\n".join(results) or "No matching log entries found."
+
+
+@mcp.tool()
 async def simulate_pr_review(target_branch: str = "main") -> str:
     """Perform a Staff Engineer level PR review of all changes in the current branch."""
     try:
