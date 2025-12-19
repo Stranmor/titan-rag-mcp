@@ -821,7 +821,9 @@ async def titan_speak(text: str) -> str:
     """Announce a message using the local voice synthesis engine (TTS)."""
     try:
         script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-speak.sh")
-        os.system(f"bash {script_path} '{text.replace(\"'\", \"\")}'")
+        # Safe escaping
+        safe_text = text.replace("'", "")
+        os.system(f"bash {script_path} '{safe_text}'")
         return f"Announced: {text}"
     except Exception as e:
         return f"Speech failed: {str(e)}"
