@@ -765,6 +765,67 @@ async def check_code_quality(project_path: str = ".") -> str:
 
 
 @mcp.tool()
+async def claim_active_zone(agent_id: str, zone_name: str) -> str:
+    """Claim a specific code zone/module to prevent other agents from editing it.
+    Args:
+        agent_id: Unique ID of the agent claiming the zone.
+        zone_name: Name of the module or file path (e.g., 'Auth', 'UI/Header').
+    """
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        agents_md_path = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "AGENTS.md")
+        
+        with open(agents_md_path, 'r') as f:
+            lines = f.readlines()
+
+        # Check if already claimed
+        claim_str = f"Agent {agent_id} working on {zone_name}"
+        for line in lines:
+            if zone_name in line and "working on" in line and agent_id not in line:
+                return f"Conflict: Zone '{zone_name}' is already claimed by another agent."
+
+        # Find [ACTIVE ZONES] section
+        insert_idx = -1
+        for i, line in enumerate(lines):
+            if "[ACTIVE ZONES]" in line:
+                insert_idx = i + 1
+                break
+        
+        if insert_idx == -1:
+            lines.append("\n## [ACTIVE ZONES]\n")
+            insert_idx = len(lines)
+
+        lines.insert(insert_idx, f"- {claim_str}\n")
+
+        with open(agents_md_path, 'w') as f:
+            f.writelines(lines)
+
+        return f"Successfully claimed zone '{zone_name}' for agent {agent_id}."
+    except Exception as e:
+        return f"Claim failed: {str(e)}"
+
+
+@mcp.tool()
+async def release_active_zone(agent_id: str, zone_name: str) -> str:
+    """Release a previously claimed code zone."""
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        agents_md_path = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "AGENTS.md")
+        
+        with open(agents_md_path, 'r') as f:
+            lines = f.readlines()
+
+        new_lines = [line for line in lines if not (agent_id in line and zone_name in line and "working on" in line)]
+
+        with open(agents_md_path, 'w') as f:
+            f.writelines(new_lines)
+
+        return f"Zone '{zone_name}' released by agent {agent_id}."
+    except Exception as e:
+        return f"Release failed: {str(e)}"
+
+
+@mcp.tool()
 async def ai_fix_code(file_path: str, error_message: str) -> str:
     """Use AI to fix a specific error in a file.
     Args:
