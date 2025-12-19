@@ -945,6 +945,50 @@ async def release_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def generate_docstrings(file_path: str) -> str:
+    """Analyze a file and add missing docstrings to functions and classes using AI."""
+    try:
+        if not os.path.exists(file_path):
+            return f"File {file_path} not found."
+
+        with open(file_path, 'r') as f:
+            code = f.read()
+
+        prompt = f"""You are a documentation expert. Review the following code and add missing docstrings to ALL functions and classes.
+Use Google-style docstrings. Return the COMPLETE fixed code. 
+No explanations, no markdown blocks.
+
+Code:
+{code}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {'temperature': 0}
+                }, timeout=120.0)
+        
+        fixed_code = response.json().get('response', '').strip()
+        
+        # Clean up markdown
+        if fixed_code.startswith("```"):
+            fixed_code = "\n".join(fixed_code.split("\n")[1:-1])
+
+        if len(fixed_code) < 10:
+            return "AI failed to generate documentation."
+
+        with open(file_path, 'w') as f:
+            f.write(fixed_code)
+            
+        return f"Successfully added docstrings to {file_path}."
+    except Exception as e:
+        return f"Documentation failed: {str(e)}"
+
+
+@mcp.tool()
 async def autopilot_fix(file_path: str) -> str:
     """Perform a full autonomous fix cycle on a file: lint, AI-repair, and verify."""
     try:
