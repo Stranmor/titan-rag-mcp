@@ -547,6 +547,28 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def analyze_workspace(path: str = ".") -> str:
+    """Analyze the workspace structure and suggest the best Zed profile and tech stack."""
+    try:
+        files = os.listdir(path)
+        structure = "\n".join(files[:20]) # Take top 20 files
+        
+        prompt = f"Analyze this project structure and suggest the best development profile (Rust, Python, Node.js, Web). Explain why and suggest 3 essential Zed extensions.\n\nFiles:\n{structure}"
+        
+        import requests
+        response = requests.post('http://localhost:11434/api/generate',
+            json={
+                'model': 'vibethinker',
+                'prompt': prompt,
+                'stream': False
+            }, timeout=30)
+        
+        return response.json().get('response', 'AI failed to analyze workspace.')
+    except Exception as e:
+        return f"Analysis failed: {str(e)}"
+
+
+@mcp.tool()
 async def run_tests(project_path: str = ".") -> str:
     """Detect and run tests for the project (pytest, cargo test, npm test)."""
     results = []
