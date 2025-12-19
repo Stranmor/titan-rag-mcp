@@ -1270,6 +1270,43 @@ async def run_in_sandbox(command: str, path: str = ".") -> str:
 
 
 @mcp.tool()
+async def generate_release_notes(since: str = "7 days ago") -> str:
+    """Generate professional Release Notes from git history using AI.
+    Args:
+        since: Git-compatible time range or ref (e.g., '7 days ago', 'v1.0').
+    """
+    try:
+        # Get commit history
+        cmd = f'git log --since="{since}" --pretty=format:"%s (%h)"'
+        commits = os.popen(cmd).read()
+        
+        if not commits:
+            return f"No commits found since {since}."
+
+        prompt = f"""You are a Product Manager. Based on the following commit messages, generate a professional Release Notes document in Markdown.
+Categorize changes into: 🚀 Features, 🐛 Bug Fixes, 🛠 Refactoring, and 📝 Documentation.
+Keep it concise and focus on user value.
+
+Commits:
+{commits}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {'temperature': 0.3}
+                }, timeout=60.0)
+        
+        release_notes = response.json().get('response', 'AI failed to generate release notes.')
+        return f"# Release Notes (Since {since})\n\n{release_notes}"
+    except Exception as e:
+        return f"Release notes generation failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_unit_tests(file_path: str) -> str:
     """Analyze a file and generate a corresponding unit test file using AI."""
     try:
