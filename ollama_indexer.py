@@ -765,6 +765,17 @@ async def check_code_quality(project_path: str = ".") -> str:
 
 
 @mcp.tool()
+async def hibernate_profile(profile_name: str) -> str:
+    """Safely snapshot and close an active Zed profile to free up resources."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-balancer.sh")
+        result = os.popen(f"bash {script_path} {profile_name}").read()
+        return result
+    except Exception as e:
+        return f"Hibernation failed: {str(e)}"
+
+
+@mcp.tool()
 async def sync_titan_docs() -> str:
     """Automatically update TITAN_COMMANDS.md by scanning available MCP tools."""
     try:
