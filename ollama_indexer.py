@@ -546,6 +546,17 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def cleanup_system() -> str:
+    """Execute the Titan Janitor cleanup utility to rotate logs and clean temp files."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-janitor.sh")
+        result = os.popen(f"bash {script_path}").read()
+        return result
+    except Exception as e:
+        return f"Cleanup failed: {str(e)}"
+
+
+@mcp.tool()
 async def get_system_health() -> str:
     """Get the current system health status (GPU Temperature, VRAM, Power, Disk, Load)."""
     health = {
