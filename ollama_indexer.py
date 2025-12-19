@@ -1614,6 +1614,19 @@ Code:
 
 
 @mcp.tool()
+async def clear_neural_cache() -> str:
+    """Clear the stored AI insights cache."""
+    try:
+        db_path = os.path.join(os.path.dirname(__file__), "insight_cache.db")
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            return "Neural Cache cleared successfully."
+        return "Cache is already empty."
+    except Exception as e:
+        return f"Failed to clear cache: {str(e)}"
+
+
+@mcp.tool()
 async def create_custom_tool(tool_name: str, code: str, description: str) -> str:
     """Create a new custom system tool and add it to the ecosystem.
     Args:
@@ -1640,7 +1653,7 @@ async def create_custom_tool(tool_name: str, code: str, description: str) -> str
 
 @mcp.tool()
 async def call_ollama(prompt: str, model: str = "vibethinker", task_type: str = "general") -> str:
-    """Dynamically tune Ollama parameters based on task type."""
+    """Dynamically tune Ollama parameters and use Neural Cache."""
     options = {"temperature": 0.2, "num_ctx": 8192}
     
     if task_type == "scoring":
@@ -1650,6 +1663,28 @@ async def call_ollama(prompt: str, model: str = "vibethinker", task_type: str = 
     elif task_type == "migration":
         options = {"temperature": 0.2, "num_ctx": 32768}
 
+    # 1. Neural Cache Lookup
+    import hashlib
+    import sqlite3
+    
+    # Create unique key based on prompt and options
+    cache_key = hashlib.sha256(f"{model}_{json.dumps(options)}_{prompt}".encode()).hexdigest()
+    db_path = os.path.join(os.path.dirname(__file__), "insight_cache.db")
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS insights (key TEXT PRIMARY KEY, response TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)")
+        
+        cursor.execute("SELECT response FROM insights WHERE key = ?", (cache_key,))
+        cached = cursor.fetchone()
+        if cached:
+            logger.info(f"Neural Cache HIT for task: {task_type}")
+            return cached[0]
+    except Exception as e:
+        logger.error(f"Cache error: {e}")
+
+    # 2. Call Ollama (Cache Miss)
     try:
         import httpx
         async with httpx.AsyncClient() as client:
@@ -1660,7 +1695,18 @@ async def call_ollama(prompt: str, model: str = "vibethinker", task_type: str = 
                     'stream': False,
                     'options': options
                 }, timeout=180.0)
-        return response.json().get('response', '')
+        
+        res_text = response.json().get('response', '')
+        
+        # 3. Store in Cache
+        if res_text:
+            try:
+                cursor.execute("INSERT OR REPLACE INTO insights (key, response) VALUES (?, ?)", (cache_key, res_text))
+                conn.commit()
+                conn.close()
+            except: pass
+            
+        return res_text
     except Exception as e:
         logger.error(f"Ollama call failed: {e}")
         return ""
