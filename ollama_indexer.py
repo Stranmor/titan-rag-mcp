@@ -1613,6 +1613,32 @@ Code:
         return f"Test generation failed: {str(e)}"
 
 
+@mcp.tool()
+async def create_custom_tool(tool_name: str, code: str, description: str) -> str:
+    """Create a new custom system tool and add it to the ecosystem.
+    Args:
+        tool_name: Name of the new tool (filename without extension).
+        code: The Python/Bash code for the tool.
+        description: What this tool does.
+    """
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), f"scripts/custom/{tool_name}.py")
+        os.makedirs(os.path.dirname(script_path), exist_ok=True)
+        
+        with open(script_path, 'w') as f:
+            f.write(f"#!/usr/bin/env python3\n\"\"\"{description}\"\"\"\n\n{code}")
+        
+        os.chmod(script_path, 0o755)
+        
+        # Log to project memory
+        await update_project_memory("TOOLING", f"Created custom tool: {tool_name} - {description}")
+        
+        return f"Successfully created custom tool at {script_path}. It will be indexed automatically."
+    except Exception as e:
+        return f"Tool creation failed: {str(e)}"
+
+
+@mcp.tool()
 async def call_ollama(prompt: str, model: str = "vibethinker", task_type: str = "general") -> str:
     """Dynamically tune Ollama parameters based on task type."""
     options = {"temperature": 0.2, "num_ctx": 8192}
