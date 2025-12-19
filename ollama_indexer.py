@@ -1303,6 +1303,37 @@ async def prune_orphaned_chunks(project: str) -> str:
 
 
 @mcp.tool()
+async def assess_project_risks(project_path: str = ".") -> str:
+    """Perform a deep AI-driven risk assessment of the project's architecture and quality."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-risk-assessment.sh")
+        raw_data = os.popen(f"bash {script_path} {project_path}").read()
+        
+        prompt = f"""You are a Senior Risk Analyst. Based on the following raw technical data, provide a structured risk assessment report.
+Highlight:
+1. Top 3 architectural risks.
+2. Impact on long-term maintainability.
+3. Specific mitigation strategies.
+
+DATA:
+{raw_data}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False
+                }, timeout=90.0)
+        
+        report = response.json().get('response', 'AI failed to analyze risks.')
+        return f"# 🛡️ Titan Risk Assessment Report\n\n{report}\n\n## Raw Data\n```\n{raw_data}\n```"
+    except Exception as e:
+        return f"Risk assessment failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_task_plan(objective: str) -> str:
     """Break down a complex project goal into atomic, actionable tasks."""
     try:
