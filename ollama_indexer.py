@@ -931,6 +931,32 @@ async def claim_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def get_latest_adr(count: int = 5) -> str:
+    """Retrieve the most recent Architecture Decision Records (ADRs)."""
+    try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        agents_md = os.path.join(os.path.dirname(os.path.dirname(current_dir)), "AGENTS.md")
+        
+        with open(agents_md, 'r') as f:
+            lines = f.readlines()
+        
+        adrs = []
+        in_adr = False
+        for line in lines:
+            if "ARCHITECTURE DECISION RECORDS" in line:
+                in_adr = True
+                continue
+            if in_adr and line.startswith("- ["):
+                adrs.append(line.strip("- \n"))
+            elif in_adr and line.startswith("##"):
+                break
+        
+        return "\n".join(adrs[-count:]) or "No ADRs found."
+    except Exception as e:
+        return f"Failed to get ADRs: {str(e)}"
+
+
+@mcp.tool()
 async def broadcast_agent_message(agent_id: str, message: str) -> str:
     """Send a message to other agents in the swarm via the common log."""
     try:
