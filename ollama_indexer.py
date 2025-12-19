@@ -103,7 +103,11 @@ chroma_client = None
 embedding_function = None
 mcp = FastMCP(title="Titan RAG (Local Code Search)")
 observers = []
-indexing_status = {"status": "starting", "folders": {}}
+indexing_status = {
+    "status": "starting", 
+    "folders": {}, 
+    "progress": {"total": 0, "processed": 0, "current_file": ""}
+}
 
 
 def sanitize_collection_name(folder_name: str) -> str:
@@ -416,10 +420,16 @@ def process_and_index_documents(
 
     # Process each document
     total_nodes = 0
+    indexing_status["progress"]["total"] = len(documents)
+    indexing_status["progress"]["processed"] = 0
+
     for doc in documents:
         try:
             file_path = doc.metadata.get("file_path", "unknown")
             file_name = os.path.basename(file_path)
+            
+            indexing_status["progress"]["current_file"] = file_path
+            indexing_status["progress"]["processed"] += 1
 
             # Determine language from file extension
             _, ext = os.path.splitext(file_name)
