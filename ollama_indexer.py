@@ -547,6 +547,54 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def run_tests(project_path: str = ".") -> str:
+    """Detect and run tests for the project (pytest, cargo test, npm test)."""
+    results = []
+    
+    # 1. Python (pytest)
+    if os.path.exists(os.path.join(project_path, "pytest.ini")) or any(f.startswith("test_") for f in os.listdir(project_path)):
+        res = os.popen(f"cd {project_path} && pytest --version && pytest -v").read()
+        results.append(f"--- Python (Pytest) ---\n{res}")
+
+    # 2. Rust (cargo test)
+    if os.path.exists(os.path.join(project_path, "Cargo.toml")):
+        res = os.popen(f"cd {project_path} && cargo test -- --nocapture").read()
+        results.append(f"--- Rust (Cargo) ---\n{res}")
+
+    # 3. Node.js (npm test)
+    if os.path.exists(os.path.join(project_path, "package.json")):
+        res = os.popen(f"cd {project_path} && npm test").read()
+        results.append(f"--- Node.js (NPM) ---\n{res}")
+
+    return "\n\n".join(results) or "No test suites detected."
+
+
+@mcp.tool()
+async def review_code(file_path: str) -> str:
+    """Use local AI (vibethinker) to perform a deep code review of a specific file."""
+    try:
+        if not os.path.exists(file_path):
+            return f"File {file_path} not found."
+
+        with open(file_path, 'r') as f:
+            code = f.read()
+
+        prompt = f"Perform a deep code review of the following file. Find bugs, security issues, and suggest architectural improvements. Output in professional markdown.\n\nFile: {file_path}\n\nCode:\n```\n{code}\n```"
+        
+        import requests
+        response = requests.post('http://localhost:11434/api/generate',
+            json={
+                'model': 'vibethinker',
+                'prompt': prompt,
+                'stream': False
+            }, timeout=60)
+        
+        return response.json().get('response', 'AI failed to generate review.')
+    except Exception as e:
+        return f"Review failed: {str(e)}"
+
+
+@mcp.tool()
 async def check_code_quality(project_path: str = ".") -> str:
     """Run linters (ruff, cargo clippy) on the project and report errors."""
     results = []
