@@ -765,6 +765,57 @@ async def check_code_quality(project_path: str = ".") -> str:
 
 
 @mcp.tool()
+async def ai_fix_code(file_path: str, error_message: str) -> str:
+    """Use AI to fix a specific error in a file.
+    Args:
+        file_path: Path to the file that needs fixing.
+        error_message: The error message from linter or test.
+    """
+    try:
+        if not os.path.exists(file_path):
+            return f"File {file_path} not found."
+
+        with open(file_path, 'r') as f:
+            code = f.read()
+
+        prompt = f"""You are a senior developer. Fix the following error in the code.
+Return ONLY the complete fixed code. No explanations, no markdown blocks.
+
+Error: {error_message}
+
+File: {file_path}
+Original Code:
+{code}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {'temperature': 0}
+                }, timeout=120.0)
+        
+        fixed_code = response.json().get('response', '').strip()
+        
+        # Clean up possible markdown wrappers if the AI ignored instructions
+        if fixed_code.startswith("```"):
+            fixed_code = "\n".join(fixed_code.split("\n")[1:-1])
+
+        if not fixed_code or len(fixed_code) < 10:
+            return "AI failed to generate a valid fix."
+
+        # Apply fix
+        with open(file_path, 'w') as f:
+            f.write(fixed_code)
+            
+        return f"Applied AI fix to {file_path}. Please run tests/linter to verify."
+    except Exception as e:
+        return f"Fix failed: {str(e)}"
+
+
+@mcp.tool()
 async def fix_code_quality(project_path: str = ".") -> str:
     """Automatically apply linter fixes (ruff --fix) to the codebase."""
     results = []
