@@ -607,6 +607,17 @@ async def analyze_workspace(path: str = ".") -> str:
 
 
 @mcp.tool()
+async def get_zed_status() -> str:
+    """Check which isolated Zed profiles are currently running."""
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/zed/zed-status.sh")
+        result = os.popen(f"bash {script_path}").read()
+        return result.strip()
+    except Exception as e:
+        return f"Failed to get status: {str(e)}"
+
+
+@mcp.tool()
 async def generate_report(project_path: str = ".") -> str:
     """Generate a high-level intelligence report about the project state."""
     try:
