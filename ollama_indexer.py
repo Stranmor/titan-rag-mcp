@@ -1255,6 +1255,21 @@ async def update_ecosystem() -> str:
 
 
 @mcp.tool()
+async def run_in_sandbox(command: str, path: str = ".") -> str:
+    """Safely execute a command in a Firejail sandbox (no network, limited FS).
+    Args:
+        command: The command to execute.
+        path: The directory to allow access to.
+    """
+    try:
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scripts/system/titan-sandbox.sh")
+        result = os.popen(f"bash {script_path} '{command}' {path}").read()
+        return result
+    except Exception as e:
+        return f"Sandbox execution failed: {str(e)}"
+
+
+@mcp.tool()
 async def autopilot_fix(file_path: str) -> str:
     """Perform a full autonomous fix cycle on a file: lint, AI-repair, and verify."""
     try:
