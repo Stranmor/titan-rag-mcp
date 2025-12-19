@@ -1270,6 +1270,66 @@ async def run_in_sandbox(command: str, path: str = ".") -> str:
 
 
 @mcp.tool()
+async def migrate_code(file_path: str, target_standard: str) -> str:
+    """Use AI to migrate or modernize code in a specific file.
+    Args:
+        file_path: Path to the code file.
+        target_standard: Description of the goal (e.g., 'Convert to TypeScript', 'Modernize to Python 3.12').
+    """
+    try:
+        if not os.path.exists(file_path):
+            return f"File {file_path} not found."
+
+        with open(file_path, 'r') as f:
+            code = f.read()
+
+        prompt = f"""You are a senior refactoring expert. 
+Task: {target_standard}
+
+Transform the following code to meet the target standard. 
+Ensure best practices, correct types, and modern syntax.
+Return ONLY the complete transformed code. No explanations, no markdown blocks.
+
+File: {file_path}
+Original Code:
+{code}
+"""
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False,
+                    'options': {'temperature': 0.2}
+                }, timeout=180.0)
+        
+        migrated_code = response.json().get('response', '').strip()
+        
+        # Clean up markdown
+        if migrated_code.startswith("```"):
+            migrated_code = "\n".join(migrated_code.split("\n")[1:-1])
+
+        if len(migrated_code) < 10:
+            return "AI failed to generate migrated code."
+
+        # Save to a new file to prevent accidental overwrite of complex migrations
+        base, ext = os.path.splitext(file_path)
+        new_ext = ext
+        if "typescript" in target_standard.lower() or "ts" in target_standard.lower():
+            new_ext = ".ts" if ext == ".js" else ".tsx"
+            
+        migrated_path = f"{base}_migrated{new_ext}"
+        
+        with open(migrated_path, 'w') as f:
+            f.write(migrated_code)
+            
+        return f"Successfully generated migrated code at {migrated_path}. Please review before replacing the original."
+    except Exception as e:
+        return f"Migration failed: {str(e)}"
+
+
+@mcp.tool()
 async def autopilot_fix(file_path: str) -> str:
     """Perform a full autonomous fix cycle on a file: lint, AI-repair, and verify."""
     try:
