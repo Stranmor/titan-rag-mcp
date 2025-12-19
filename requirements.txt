@@ -1,0 +1,8 @@
+chromadb==0.6.3
+fastmcp==0.4.1
+watchdog==6.0.0
+tree-sitter-language-pack==0.6.1
+llama-index-core==0.12.25
+llama-index-readers-file==0.4.6
+ollama==0.4.7
+python-dotenv==1.0.1
