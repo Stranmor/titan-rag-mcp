@@ -546,6 +546,35 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def get_project_map() -> str:
+    """Get a high-level overview of the current project (files, git, stack)."""
+    project_map = {
+        "structure": "",
+        "git_history": "",
+        "tech_stack": []
+    }
+    
+    try:
+        # 1. File Structure (Top level)
+        project_map["structure"] = os.popen("tree -L 2 --noreport -I 'node_modules|.git|.venv|chroma_db'").read()
+        
+        # 2. Git History
+        project_map["git_history"] = os.popen("git log -n 5 --oneline 2>/dev/null").read() or "No git history found"
+        
+        # 3. Tech Stack Detection
+        for file in os.listdir("."):
+            if file == "package.json": project_map["tech_stack"].append("Node.js")
+            if file == "requirements.txt" or file == "pyproject.toml": project_map["tech_stack"].append("Python")
+            if file == "Cargo.toml": project_map["tech_stack"].append("Rust")
+            if file == "go.mod": project_map["tech_stack"].append("Go")
+            if file == "Makefile": project_map["tech_stack"].append("C/C++ (Make)")
+    except Exception as e:
+        return f"Failed to generate map: {str(e)}"
+
+    return json.dumps(project_map, indent=2)
+
+
+@mcp.tool()
 async def read_mcp_logs(lines: int = 50) -> str:
     """Read the last N lines of the MCP server log file."""
     try:
