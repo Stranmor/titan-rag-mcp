@@ -546,6 +546,31 @@ def process_and_index_documents(
 
 
 @mcp.tool()
+async def get_system_health() -> str:
+    """Get the current system health status (GPU, VRAM, Disk)."""
+    health = {"gpu": "Unknown", "vram": "Unknown", "disk": "Unknown"}
+    
+    try:
+        # Check GPU status via rocm-smi
+        gpu_info = os.popen("rocm-smi --showuse --showmeminfo vram --json").read()
+        health["gpu_details"] = json.loads(gpu_info)
+        health["gpu"] = "Healthy"
+    except Exception:
+        health["gpu"] = "Error or ROCm not available"
+
+    try:
+        # Check Disk space for PROJECTS_ROOT
+        projects_path = config.get("projects_root", ".")
+        disk = os.statvfs(projects_path)
+        free_gb = (disk.f_bavail * disk.f_frsize) / (1024**3)
+        health["disk"] = f"{free_gb:.2f} GB free"
+    except Exception:
+        health["disk"] = "Error checking disk"
+
+    return json.dumps(health, indent=2)
+
+
+@mcp.tool()
 async def force_reindex(folder: str) -> str:
     """Force a full re-indexing of a specific project folder.
     Args:
