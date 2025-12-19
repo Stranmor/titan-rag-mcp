@@ -602,13 +602,14 @@ async def analyze_workspace(path: str = ".") -> str:
         
         prompt = f"Analyze this project structure and suggest the best development profile (Rust, Python, Node.js, Web). Explain why and suggest 3 essential Zed extensions.\n\nFiles:\n{structure}"
         
-        import requests
-        response = requests.post('http://localhost:11434/api/generate',
-            json={
-                'model': 'vibethinker',
-                'prompt': prompt,
-                'stream': False
-            }, timeout=30)
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False
+                }, timeout=30.0)
         
         return response.json().get('response', 'AI failed to analyze workspace.')
     except Exception as e:
@@ -650,13 +651,14 @@ Technical Debt: {todos[:500]}
 Hardware Health: {health}
 """
         
-        import requests
-        response = requests.post('http://localhost:11434/api/generate',
-            json={
-                'model': 'vibethinker',
-                'prompt': prompt,
-                'stream': False
-            }, timeout=90)
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False
+                }, timeout=90.0)
         
         report = response.json().get('response', 'AI failed to generate report.')
         
@@ -730,13 +732,14 @@ async def review_code(file_path: str) -> str:
 
         prompt = f"Perform a deep code review of the following file. Find bugs, security issues, and suggest architectural improvements. Output in professional markdown.\n\nFile: {file_path}\n\nCode:\n```\n{code}\n```"
         
-        import requests
-        response = requests.post('http://localhost:11434/api/generate',
-            json={
-                'model': 'vibethinker',
-                'prompt': prompt,
-                'stream': False
-            }, timeout=60)
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post('http://localhost:11434/api/generate',
+                json={
+                    'model': 'vibethinker',
+                    'prompt': prompt,
+                    'stream': False
+                }, timeout=60.0)
         
         return response.json().get('response', 'AI failed to generate review.')
     except Exception as e:
@@ -1302,40 +1305,55 @@ async def rag_search_code(
         all_results.sort(key=lambda x: x["relevance"], reverse=True)
 
         # Take top candidates for re-ranking
-        candidates = all_results[:15]
+        candidates = all_results[:12] # Optimal batch size
         if not candidates:
             return json.dumps({"results": [], "total_results": 0})
 
-        # Re-ranking stage (Titan Class Innovation)
-        # We ask the LLM to score the candidates
-        reranked_results = []
-        for cand in candidates:
-            try:
-                # Prepare a scoring prompt
-                prompt = f"Query: {query}\n\nCode Snippet from {cand['file_path']}:\n{cand['text']}\n\nTask: Rate the relevance of this snippet to the query from 0 to 100. Output ONLY the number."
-                
-                response = requests.post('http://localhost:11434/api/generate',
+        # Batch Re-ranking stage (Titan Class Performance)
+        try:
+            import httpx
+            
+            # Formulate a single batch scoring prompt
+            snippets_text = ""
+            for i, cand in enumerate(candidates):
+                snippets_text += f"ID: {i}\nFile: {cand['file_path']}\nContent:\n{cand['text'][:500]}\n---\n"
+
+            prompt = f"""Rate the relevance of the following code snippets to the query: "{query}"
+For each snippet, provide a score from 0 to 100.
+Return the results as a simple JSON list of integers corresponding to the IDs.
+Example: [85, 10, 45...]
+Output ONLY the JSON list.
+
+Snippets:
+{snippets_text}"""
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post('http://localhost:11434/api/generate',
                     json={
                         'model': 'qwen2.5-coder:1.5b',
                         'prompt': prompt,
                         'stream': False,
-                        'options': {'num_predict': 5, 'temperature': 0}
-                    }, timeout=10)
+                        'options': {'temperature': 0}
+                    }, timeout=30.0)
                 
-                score_str = response.json().get('response', '0').strip()
-                # Extract digits only
+                resp_json = response.json()
+                raw_response = resp_json.get('response', '[]').strip()
+                
+                # Extract JSON list from response
                 import re
-                score_match = re.search(r'\d+', score_str)
-                score = int(score_match.group()) if score_match else 0
+                list_match = re.search(r'\[.*\]', raw_response, re.DOTALL)
+                if list_match:
+                    scores = json.loads(list_match.group())
+                    for i, score in enumerate(scores):
+                        if i < len(candidates):
+                            candidates[i]["relevance"] = int(score)
                 
-                cand["relevance"] = score # Override with LLM score
-                reranked_results.append(cand)
-            except:
-                reranked_results.append(cand) # Fallback to original score
+            candidates.sort(key=lambda x: x["relevance"], reverse=True)
+        except Exception as e:
+            logger.error(f"Batch re-ranking failed: {e}")
+            # Fallback to original vector relevance if batch fails
 
-        # Sort by new scores and take top n_results
-        reranked_results.sort(key=lambda x: x["relevance"], reverse=True)
-        final_results = reranked_results[:n_results]
+        final_results = candidates[:n_results]
 
         return json.dumps({
             "results": final_results,
