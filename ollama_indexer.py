@@ -628,6 +628,37 @@ async def get_zed_status() -> str:
 
 
 @mcp.tool()
+async def get_ecosystem_analytics(days: int = 7) -> str:
+    """Perform a deep analysis of project health vs. developer activity."""
+    try:
+        analytics = {"time_stats": {}, "health_trend": [], "top_errors": []}
+        
+        # 1. Analyze Time Tracking
+        time_log = os.path.expanduser("~/.titan-time-tracking.csv")
+        if os.path.exists(time_log):
+            import pandas as pd
+            df_time = pd.read_csv(time_log)
+            # Simple hours sum
+            analytics["time_stats"] = df_time.groupby('profile').size().to_dict() # mins
+
+        # 2. Analyze Health History
+        health_log = os.path.expanduser("~/.titan-health-history.csv")
+        if os.path.exists(health_log):
+            with open(health_log, 'r') as f:
+                analytics["health_trend"] = f.readlines()[-days:]
+
+        # 3. Analyze Logs for common errors
+        mcp_log = os.path.join(os.path.dirname(__file__), "mcp_server.log")
+        if os.path.exists(mcp_log):
+            errors = os.popen(f"grep 'ERROR' {mcp_log} | tail -n 20").read()
+            analytics["top_errors"] = errors.splitlines()
+
+        return json.dumps(analytics, indent=2)
+    except Exception as e:
+        return f"Analytics failed: {str(e)}"
+
+
+@mcp.tool()
 async def generate_report(project_path: str = ".") -> str:
     """Generate a high-level intelligence report about the project state."""
     try:
