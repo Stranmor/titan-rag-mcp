@@ -945,6 +945,45 @@ async def release_active_zone(agent_id: str, zone_name: str) -> str:
 
 
 @mcp.tool()
+async def apply_security_patches(project_path: str = ".") -> str:
+    """Identify and automatically fix security risks (like hardcoded secrets)."""
+    try:
+        # 1. Run Security Audit
+        audit_res = await audit_security(project_path)
+        if "✅ No secrets detected" in audit_res:
+            return "🛡️ No immediate security risks found to patch."
+
+        # 2. Extract first finding for patching
+        # We focus on one at a time for stability
+        import re
+        match = re.search(r"(.*):(\d+):.*Found potential secret", audit_res)
+        if not match:
+            return "⚠️ Security risks found but could not parse location for automated patching."
+        
+        file_path = match.group(1).strip()
+        line_num = match.group(2)
+        
+        prompt = f"""You are a Security Engineer. The file {file_path} contains a hardcoded secret on line {line_num}.
+Fix it by replacing the secret with an environment variable call (e.g., os.getenv('KEY_NAME')).
+Return ONLY the complete fixed code. No markdown blocks.
+
+File: {file_path}
+Finding: {match.group(0)}
+"""
+        # 3. Apply AI Repair
+        res = await ai_fix_code(file_path, prompt)
+        
+        # 4. Update .env.example
+        env_ex = os.path.join(project_path, ".env.example")
+        with open(env_ex, 'a') as f:
+            f.write(f"\n# Added by Titan Security Patcher\n# TITAN_SECRET_PLACEHOLDER=your_value_here\n")
+
+        return f"🔒 Security Patch Applied to {file_path}. Secret moved to environment variable logic. Added placeholder to .env.example."
+    except Exception as e:
+        return f"Security patching failed: {str(e)}"
+
+
+@mcp.tool()
 async def find_reusable_logic(query: str, current_project: str) -> str:
     """Find similar logic in other projects to avoid rewriting existing code.
     Args:
